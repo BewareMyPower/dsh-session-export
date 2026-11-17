@@ -235,6 +235,9 @@ const FILTER_KINDS = {
   'all': ['user', 'assistant', 'tool', 'custom', 'system', 'meta'],
 }
 
+/** Filters that drop assistant steps carrying only reasoning, no visible text. */
+const FILTER_SKIPS_THINKING = { 'no-tools': true }
+
 const CSS = `
 :root {
   --bg: #21252c; --panel: #282c34; --border: #3a3f47; --text: #dee0e1;
@@ -307,6 +310,7 @@ mark { background: var(--warn); color: var(--bg); border-radius: 2px; padding: 0
 
 const APP_JS = `
 const FILTERS = ${JSON.stringify(FILTER_KINDS)};
+const SKIP_THINKING = ${JSON.stringify(FILTER_SKIPS_THINKING)};
 const list = document.getElementById('items');
 const detail = document.getElementById('detail');
 const search = document.getElementById('search');
@@ -318,6 +322,7 @@ let sel = -1;
 
 function passes(i) {
   if (!FILTERS[filter].includes(ITEMS[i].kind)) return false;
+  if (SKIP_THINKING[filter] === true && ITEMS[i].thinking === true) return false;
   if (query === '') return true;
   const hay = ITEMS[i].search;
   return query.toLowerCase().split(/\\s+/).filter(Boolean).every(tok => hay.includes(tok));
@@ -421,6 +426,7 @@ export function formatSessionHtml(events, options = {}) {
       status: item.kind === 'tool'
         ? (item.result === undefined ? 'pending' : item.result.isError ? 'error' : 'ok')
         : undefined,
+      thinking: item.kind === 'assistant' && item.text.trim() === '',
       preview: escapeHtml(itemPreview(item)),
       html: itemDetailHtml(item),
       search: itemSearchText(item),
@@ -444,7 +450,7 @@ export function formatSessionHtml(events, options = {}) {
       <input id="search" type="search" placeholder="Search…" autocomplete="off">
       <div id="filters">
         <button data-filter="default" class="active" title="User, assistant, and tool entries">Default</button>
-        <button data-filter="no-tools" title="Default minus tool entries">No-tools</button>
+        <button data-filter="no-tools" title="Default minus tool entries and thinking-only steps">No-tools</button>
         <button data-filter="user-only" title="Only user messages">User</button>
         <button data-filter="labeled-only" title="Only labeled entries">Labeled</button>
         <button data-filter="all" title="Show everything">All</button>

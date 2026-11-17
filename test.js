@@ -59,6 +59,27 @@ test('renders reasoning, interruption, and usage on assistant entries', () => {
   assert.ok(html.includes('in 1'))
 })
 
+test('flags reasoning-only assistant steps so No-tools can drop them', () => {
+  const html = formatSessionHtml([
+    {
+      type: 'assistant/message', surfaceOp: 'append',
+      data: {
+        message: {
+          content: [
+            { type: 'reasoning', text: 'hmm' },
+            { type: 'tool-call', id: 'c1', name: 'exec', arguments: '{}' },
+            { type: 'tool-call', id: 'c2', name: 'exec', arguments: '{}' },
+          ],
+        },
+      },
+    },
+    assistant('answer'),
+  ])
+  const items = JSON.parse(html.match(/const ITEMS = (\[.*?\]);\n/s)[1])
+  assert.deepEqual(items.map(item => item.thinking), [true, false])
+  assert.equal(items[0].preview, '(thinking) hmm')
+})
+
 test('labels non-human user-role sources as context entries', () => {
   const html = formatSessionHtml([
     user('file changed', { kind: 'file-notice', summary: 'file-notice' }),
