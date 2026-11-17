@@ -379,14 +379,30 @@ function highlight(node, q) {
   while (walker.nextNode()) jobs.push(walker.currentNode);
   for (const text of jobs) {
     const low = text.nodeValue.toLowerCase();
-    let idx = -1, len = 0;
-    for (const tok of toks) { const at = low.indexOf(tok); if (at >= 0 && (idx < 0 || at < idx)) { idx = at; len = tok.length; } }
-    if (idx < 0) continue;
-    const mark = document.createElement('mark');
-    mark.textContent = text.nodeValue.slice(idx, idx + len);
-    const after = text.splitText(idx);
-    after.splitText(len);
-    text.parentNode.insertBefore(mark, after);
+    const hits = [];
+    for (const tok of toks) {
+      let at = low.indexOf(tok);
+      while (at >= 0) { hits.push([at, tok.length]); at = low.indexOf(tok, at + tok.length); }
+    }
+    if (hits.length === 0) continue;
+    hits.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+    const merged = [];
+    for (const [at, len] of hits) {
+      const last = merged[merged.length - 1];
+      if (last !== undefined && at <= last[0] + last[1]) last[1] = Math.max(last[1], at + len - last[0]);
+      else merged.push([at, len]);
+    }
+    const frag = document.createDocumentFragment();
+    let pos = 0;
+    for (const [at, len] of merged) {
+      frag.append(document.createTextNode(text.nodeValue.slice(pos, at)));
+      const mark = document.createElement('mark');
+      mark.textContent = text.nodeValue.slice(at, at + len);
+      frag.append(mark);
+      pos = at + len;
+    }
+    frag.append(document.createTextNode(text.nodeValue.slice(pos)));
+    text.parentNode.replaceChild(frag, text);
   }
 }
 function select(i) {
