@@ -1,0 +1,3 @@
+- insert:
+    - id: session-export
+      name: '@bewaremypower/dsh-session-export'
