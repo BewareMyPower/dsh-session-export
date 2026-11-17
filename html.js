@@ -293,6 +293,10 @@ body { font: 12px/1.5 ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
 #main { flex: 1; overflow-y: auto; padding: 18px 26px 60px; min-width: 0; }
 #detail { max-width: 980px; }
 #detail .placeholder { color: var(--dim); padding: 40px 0; text-align: center; }
+#detail .entry { padding: 14px 0; border-top: 1px solid var(--border); scroll-margin-top: 8px; }
+#detail .entry:first-child { border-top: 0; padding-top: 0; }
+#detail .entry.turn { border-top: 2px dashed var(--border); margin-top: 10px; }
+#detail .entry.current { box-shadow: inset 3px 0 0 var(--accent); padding-left: 9px; }
 .detail-label { display: flex; justify-content: space-between; gap: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-size: 11px; margin-bottom: 8px; }
 .detail-label .time { text-transform: none; letter-spacing: 0; }
 #stamp { color: var(--dim); padding: 6px 10px 0; }
@@ -340,9 +344,12 @@ let query = '';
 let visible = [];
 let sel = -1;
 
-function passes(i) {
+function kindPasses(i) {
   if (!FILTERS[filter].includes(ITEMS[i].kind)) return false;
   if (SKIP_THINKING[filter] === true && ITEMS[i].thinking === true) return false;
+  return true;
+}
+function matches(i) {
   if (query === '') return true;
   const hay = ITEMS[i].search;
   return query.toLowerCase().split(/\\s+/).filter(Boolean).every(tok => hay.includes(tok));
@@ -357,15 +364,30 @@ function row(i) {
   b.addEventListener('click', () => select(i));
   return b;
 }
+function renderDetail() {
+  detail.textContent = '';
+  let any = false;
+  for (let i = 0; i < ITEMS.length; i++) {
+    if (!kindPasses(i)) continue;
+    any = true;
+    const div = document.createElement('div');
+    div.className = 'entry' + (ITEMS[i].turnStart ? ' turn' : '');
+    div.dataset.i = i;
+    div.innerHTML = ITEMS[i].html;
+    detail.appendChild(div);
+  }
+  if (!any) detail.innerHTML = '<div class="placeholder">No entries match this filter.</div>';
+}
 function render() {
   visible = [];
-  for (let i = 0; i < ITEMS.length; i++) if (passes(i)) visible.push(i);
+  for (let i = 0; i < ITEMS.length; i++) if (kindPasses(i) && matches(i)) visible.push(i);
   count.textContent = visible.length + ' / ' + ITEMS.length + ' entries';
   list.textContent = '';
   for (const i of visible) list.appendChild(row(i));
+  unmark(detail);
+  highlight(detail, query);
   if (!visible.includes(sel)) sel = visible[0] ?? -1;
   if (sel >= 0) select(sel);
-  else { detail.innerHTML = '<div class="placeholder">No entries match.</div>'; }
 }
 function unmark(node) {
   node.querySelectorAll('mark').forEach(m => { m.replaceWith(document.createTextNode(m.textContent)); });
@@ -405,22 +427,34 @@ function highlight(node, q) {
     text.parentNode.replaceChild(frag, text);
   }
 }
+function markCurrent(i) {
+  detail.querySelectorAll('.entry.current').forEach(el => el.classList.remove('current'));
+  const entry = detail.querySelector('.entry[data-i="' + i + '"]');
+  if (entry !== null) entry.classList.add('current');
+  return entry;
+}
+function markSelRow() {
+  list.querySelectorAll('.item.sel').forEach(el => el.classList.remove('sel'));
+  const pos = visible.indexOf(sel);
+  if (pos >= 0 && list.children[pos]) { list.children[pos].classList.add('sel'); list.children[pos].scrollIntoView({ block: 'nearest' }); }
+}
 function select(i) {
   sel = i;
-  list.querySelectorAll('.item.sel').forEach(el => el.classList.remove('sel'));
-  const rows = [...list.children];
-  const pos = visible.indexOf(i);
-  if (pos >= 0 && rows[pos]) { rows[pos].classList.add('sel'); rows[pos].scrollIntoView({ block: 'nearest' }); }
-  detail.innerHTML = ITEMS[i].html;
-  highlight(detail, query);
-  detail.scrollTop = 0; document.getElementById('main').scrollTop = 0;
+  markSelRow();
+  const entry = markCurrent(i);
+  if (entry !== null) entry.scrollIntoView({ block: 'start' });
 }
-search.addEventListener('input', () => { query = search.value; render(); });
+let searchTimer = 0;
+search.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { query = search.value; render(); }, 120);
+});
 document.getElementById('filters').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-filter]');
   if (!b) return;
   filter = b.dataset.filter;
   document.querySelectorAll('#filters button').forEach(x => x.classList.toggle('active', x === b));
+  renderDetail();
   render();
 });
 document.addEventListener('keydown', (e) => {
@@ -448,6 +482,24 @@ resizer.addEventListener('mousedown', () => {
   document.body.style.userSelect = 'none';
   document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
 });
+const main = document.getElementById('main');
+let spyPending = false;
+main.addEventListener('scroll', () => {
+  if (spyPending) return;
+  spyPending = true;
+  setTimeout(() => {
+    spyPending = false;
+    const top = main.getBoundingClientRect().top;
+    let cur = -1;
+    for (const entry of detail.children) {
+      if (!entry.classList.contains('entry')) break;
+      if (entry.getBoundingClientRect().top - top <= 24) cur = Number(entry.dataset.i);
+      else break;
+    }
+    if (cur >= 0 && cur !== sel) { sel = cur; markCurrent(cur); markSelRow(); }
+  }, 60);
+});
+renderDetail();
 render();
 `
 
