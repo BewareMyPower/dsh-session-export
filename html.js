@@ -274,7 +274,7 @@ body { font: 12px/1.5 ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
 #filters button { padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font: inherit; cursor: pointer; }
 #filters button.active { background: var(--custombg); color: var(--text); border-color: var(--accent); }
 #count { color: var(--dim); padding: 6px 10px 0; }
-#items { overflow-y: auto; flex: 1; padding: 6px 0; }
+#items { overflow-y: auto; flex: 1; min-height: 0; padding: 6px 0; }
 .item { display: block; width: 100%; text-align: left; padding: 3px 10px; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item:hover { background: rgba(255,255,255,.04); }
 .item.sel { background: var(--sel); color: var(--text); }
@@ -288,7 +288,7 @@ body { font: 12px/1.5 ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
 .kind-meta .k, .kind-meta .b { color: var(--dim); }
 .item .err { color: var(--error); }
 .item.turn { margin-top: 6px; padding-top: 4px; border-top: 1px dashed var(--border); }
-#resizer { width: 5px; cursor: col-resize; background: transparent; }
+#resizer { width: 5px; cursor: col-resize; background: transparent; flex: none; }
 #resizer:hover { background: var(--border); }
 #main { flex: 1; overflow-y: auto; padding: 18px 26px 60px; min-width: 0; }
 #detail { max-width: 980px; }
@@ -324,7 +324,7 @@ mark { background: var(--warn); color: var(--bg); border-radius: 2px; padding: 0
 @media (max-width: 760px) {
   #app { flex-direction: column; }
   #sidebar { width: 100%; max-width: none; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--border); }
-  #resizer { display: none; }
+  #resizer { width: auto; height: 5px; cursor: row-resize; }
 }
 `
 
@@ -415,10 +415,18 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === '/') { search.focus(); e.preventDefault(); }
 });
 const resizer = document.getElementById('resizer');
+const sidebar = document.getElementById('sidebar');
 resizer.addEventListener('mousedown', () => {
+  const column = getComputedStyle(document.getElementById('app')).flexDirection === 'column';
   const move = (e) => {
-    const w = Math.min(Math.max(e.clientX, 220), window.innerWidth * 0.6);
-    document.getElementById('sidebar').style.width = w + 'px';
+    if (column) {
+      const h = Math.min(Math.max(e.clientY, 60), window.innerHeight - 100);
+      sidebar.style.maxHeight = 'none';
+      sidebar.style.height = h + 'px';
+    } else {
+      const w = Math.min(Math.max(e.clientX, 220), window.innerWidth * 0.6);
+      sidebar.style.width = w + 'px';
+    }
   };
   const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.body.style.userSelect = ''; };
   document.body.style.userSelect = 'none';
