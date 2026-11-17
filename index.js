@@ -10,7 +10,7 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import { formatSessionHtml } from './html.js'
 
 export const name = 'session-export'
-export const inject = ['commands']
+export const inject = ['commands', 'connection']
 
 /** Absolute registration path for the HTML export route. */
 export const SESSION_EXPORT_PATH = '/api/session-export.html'
@@ -90,9 +90,7 @@ export function apply(ctx, config = {}) {
     },
   }), 'session-export: command')
 
-  const connection = ctx.get('connection')
-  if (connection === undefined) return
-  connection.fetch.register({
+  ctx.effect(() => ctx.connection.fetch.register({
     path: SESSION_EXPORT_PATH,
     methods: ['GET', 'HEAD'],
     requestBody: 'buffered',
@@ -122,5 +120,5 @@ export function apply(ctx, config = {}) {
         return new Response('session HTML export failed to read the stored log', { status: 500 })
       }
     },
-  })
+  }), 'session-export: route')
 }
