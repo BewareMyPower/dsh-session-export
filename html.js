@@ -106,7 +106,7 @@ function collectItems(events) {
           if (block.type === 'reasoning') return { reasoning: block.text }
           return { text: block.type === 'text' ? block.text : block.type === 'tool-call' ? '' : visibleText([block]) }
         })
-        const text = chunks.map(chunk => chunk.text ?? '').join('\n\n')
+        const text = chunks.map(chunk => chunk.text ?? '').filter(part => part !== '').join('\n\n')
         const reasoning = chunks.map(chunk => chunk.reasoning ?? '').filter(part => part !== '').join('\n\n')
         if (text.trim() === '' && reasoning.trim() === '') break
         items.push({
@@ -167,7 +167,12 @@ const KIND_LABEL = {
 function itemPreview(item) {
   switch (item.kind) {
     case 'user': return firstLine(item.text)
-    case 'assistant': return firstLine(item.text === '' ? '(thinking only)' : item.text)
+    case 'assistant': {
+      const text = firstLine(item.text)
+      if (text !== '') return text
+      const thinking = firstLine(item.reasoning ?? '')
+      return thinking === '' ? '(no visible content)' : `(thinking) ${thinking}`
+    }
     case 'tool': return `${item.name}${item.result === undefined ? ' (pending)' : item.result.isError ? ' ✗' : ''}`
     case 'custom': return `[${item.label}] ${firstLine(item.text)}`
     case 'system': return firstLine(item.text)
