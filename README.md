@@ -4,8 +4,8 @@ DeepSeek Harness plugin that renders a Session as a **self-contained interactive
 
 The exported page needs no server and no assets:
 
-- a left sidebar lists every entry (`user`, `assistant`, `tool`, `context`, `system`, `meta`) with a live **search box** and filter tabs (**Default / No-tools / User / Labeled / All**),
-- the right pane shows the selected entry: Markdown-rendered assistant text (reasoning folded into a collapsible *Thinking* block), tool arguments + result with error highlighting, injected context, and turn separators,
+- a left sidebar lists every entry (`user`, `assistant`, `tool`, `context`, `system`, `meta`) with a live **search box** and filter tabs (**Default / No-tools / User / Labeled / All**); *No-tools* also hides assistant steps that carry only reasoning,
+- the right pane shows the selected entry with its event timestamp in the header line: Markdown-rendered assistant text (reasoning folded into a collapsible *Thinking* block), tool arguments + result with error highlighting, injected context, and turn separators,
 - `↑`/`↓` (or `j`/`k`) move the selection, `/` focuses search, and matches are highlighted in the detail pane.
 
 ## What it adds

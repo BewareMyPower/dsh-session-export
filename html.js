@@ -17,6 +17,18 @@ function escapeHtml(text) {
     .replace(/"/g, '&quot;')
 }
 
+/**
+ * @param {number|undefined} ms - event timestamp in epoch milliseconds.
+ * @returns {string} local `YYYY-MM-DD HH:MM:SS`, or '' when the log carries no timestamp.
+ */
+function formatTime(ms) {
+  if (typeof ms !== 'number') return ''
+  const date = new Date(ms)
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
 function firstLine(text, max = 140) {
   const line = String(text).split('\n').find(part => part.trim() !== '') ?? ''
   const flat = line.trim()
@@ -78,13 +90,14 @@ function collectItems(events) {
   let turn = 0
   for (const event of events) {
     const data = event.data ?? {}
+    const push = (item) => { items.push({ ...item, time: event.time }) }
     switch (event.type) {
       case 'session/title':
         title = data.title
         break
       case 'turn/start':
         turn = data.turn ?? turn + 1
-        items.push({ kind: 'meta', label: `turn ${turn}`, text: '', turn })
+        push({ kind: 'meta', label: `turn ${turn}`, text: '', turn })
         break
       case 'user/message': {
         if (event.surfaceOp !== 'append') break
@@ -92,10 +105,10 @@ function collectItems(events) {
         const text = visibleText(data.content)
         if (text === '') break
         if (source.kind === 'user') {
-          items.push({ kind: 'user', text, turn })
+          push({ kind: 'user', text, turn })
         } else {
           const label = source.summary ?? source.kind ?? 'context'
-          items.push({ kind: 'custom', label, text, turn })
+          push({ kind: 'custom', label, text, turn })
         }
         break
       }
@@ -109,7 +122,7 @@ function collectItems(events) {
         const text = chunks.map(chunk => chunk.text ?? '').filter(part => part !== '').join('\n\n')
         const reasoning = chunks.map(chunk => chunk.reasoning ?? '').filter(part => part !== '').join('\n\n')
         if (text.trim() === '' && reasoning.trim() === '') break
-        items.push({
+        push({
           kind: 'assistant', text, reasoning, turn,
           interrupted: data.interrupted === true,
           usage: usageLine(data.usage),
@@ -119,7 +132,7 @@ function collectItems(events) {
       case 'tool/call': {
         const entry = {
           kind: 'tool', name: data.name ?? 'tool', arguments: data.arguments ?? '',
-          result: undefined, turn,
+          result: undefined, turn, time: event.time,
         }
         items.push(entry)
         calls.set(String(data.callId), entry)
@@ -131,7 +144,7 @@ function collectItems(events) {
         const callId = String(message.toolCallId ?? '')
         let entry = calls.get(callId)
         if (entry === undefined) {
-          entry = { kind: 'tool', name: 'unknown', arguments: '', result: undefined, turn }
+          entry = { kind: 'tool', name: 'unknown', arguments: '', result: undefined, turn, time: event.time }
           items.push(entry)
           calls.set(callId, entry)
         }
@@ -145,11 +158,11 @@ function collectItems(events) {
       case 'system/message': {
         if (event.surfaceOp !== 'append') break
         const text = visibleText(data.message?.content)
-        if (text.trim() !== '') items.push({ kind: 'system', label: 'system', text, turn })
+        if (text.trim() !== '') push({ kind: 'system', label: 'system', text, turn })
         break
       }
       case 'command/run': {
-        items.push({ kind: 'meta', label: `/${data.name ?? 'command'}${data.args ? ` ${data.args}` : ''}`, text: '', turn })
+        push({ kind: 'meta', label: `/${data.name ?? 'command'}${data.args ? ` ${data.args}` : ''}`, text: '', turn })
         break
       }
       default:
@@ -181,12 +194,17 @@ function itemPreview(item) {
   }
 }
 
+function labelHtml(label, item) {
+  const time = formatTime(item.time)
+  return `<div class="detail-label"><span>${escapeHtml(label)}</span>${time === '' ? '' : `<span class="time">${time}</span>`}</div>`
+}
+
 function itemDetailHtml(item) {
   switch (item.kind) {
     case 'user':
-      return `<div class="detail-label">user</div><div class="md">${renderMarkdown(item.text)}</div>`
+      return `${labelHtml('user', item)}<div class="md">${renderMarkdown(item.text)}</div>`
     case 'assistant': {
-      const parts = ['<div class="detail-label">assistant</div>']
+      const parts = [labelHtml('assistant', item)]
       if (item.reasoning.trim() !== '') {
         parts.push(`<details class="thinking"><summary>Thinking</summary><div class="thinking-body">${escapeHtml(item.reasoning).replace(/\n/g, '<br>')}</div></details>`)
       }
@@ -199,7 +217,7 @@ function itemDetailHtml(item) {
     }
     case 'tool': {
       const status = item.result === undefined ? 'pending' : item.result.isError ? 'error' : 'ok'
-      const parts = [`<div class="detail-label">tool · ${escapeHtml(item.name)} · ${status}</div>`]
+      const parts = [labelHtml(`tool · ${item.name} · ${status}`, item)]
       parts.push('<div class="detail-sub">arguments</div>')
       parts.push(`<pre class="code">${escapeHtml(item.arguments === '' ? '(none)' : jsonBlock(item.arguments))}</pre>`)
       parts.push(`<div class="detail-sub">result</div>`)
@@ -212,11 +230,11 @@ function itemDetailHtml(item) {
       return parts.join('')
     }
     case 'custom':
-      return `<div class="detail-label">context · ${escapeHtml(item.label)}</div><pre class="code">${escapeHtml(item.text)}</pre>`
+      return `${labelHtml(`context · ${item.label}`, item)}<pre class="code">${escapeHtml(item.text)}</pre>`
     case 'system':
-      return `<div class="detail-label">system</div><pre class="code">${escapeHtml(item.text)}</pre>`
+      return `${labelHtml('system', item)}<pre class="code">${escapeHtml(item.text)}</pre>`
     case 'meta':
-      return `<div class="detail-label">${escapeHtml(item.label)}</div>`
+      return labelHtml(item.label, item)
     default:
       return ''
   }
@@ -275,7 +293,9 @@ body { font: 12px/1.5 ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
 #main { flex: 1; overflow-y: auto; padding: 18px 26px 60px; min-width: 0; }
 #detail { max-width: 980px; }
 #detail .placeholder { color: var(--dim); padding: 40px 0; text-align: center; }
-.detail-label { color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-size: 11px; margin-bottom: 8px; }
+.detail-label { display: flex; justify-content: space-between; gap: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-size: 11px; margin-bottom: 8px; }
+.detail-label .time { text-transform: none; letter-spacing: 0; }
+#stamp { color: var(--dim); padding: 6px 10px 0; }
 .detail-sub { color: var(--dim); margin: 14px 0 4px; }
 .detail-foot { color: var(--dim); margin-top: 10px; }
 .error-reason { color: var(--error); margin-bottom: 4px; }
@@ -455,12 +475,12 @@ export function formatSessionHtml(events, options = {}) {
         <button data-filter="labeled-only" title="Only labeled entries">Labeled</button>
         <button data-filter="all" title="Show everything">All</button>
       </div>
-      <div id="count"></div>
+      <div id="count"></div>${stamp}
     </div>
     <div id="items"></div>
   </div>
   <div id="resizer"></div>
-  <div id="main"><div id="detail"><div class="placeholder">Loading…</div></div>${stamp}</div>
+  <div id="main"><div id="detail"><div class="placeholder">Loading…</div></div></div>
 </div>
 <script>
 const ITEMS = ${json};

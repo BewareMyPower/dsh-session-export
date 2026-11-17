@@ -80,6 +80,13 @@ test('flags reasoning-only assistant steps so No-tools can drop them', () => {
   assert.equal(items[0].preview, '(thinking) hmm')
 })
 
+test('stamps each entry with its event time in the detail header', () => {
+  const detailOf = (event) => JSON.parse(formatSessionHtml([event]).match(/const ITEMS = (\[.*?\]);\n/s)[1])[0].html
+  assert.match(detailOf({ ...user('hi'), time: 1_763_000_000_000 }),
+    /<span>user<\/span><span class="time">\d{4}-\d\d-\d\d \d\d:\d\d:\d\d<\/span>/)
+  assert.doesNotMatch(detailOf(user('hi')), /class="time"/)
+})
+
 test('labels non-human user-role sources as context entries', () => {
   const html = formatSessionHtml([
     user('file changed', { kind: 'file-notice', summary: 'file-notice' }),
